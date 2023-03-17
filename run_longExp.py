@@ -4,6 +4,7 @@ import torch
 from exp.exp_main import Exp_Main
 from exp.exp_memnet import Exp_MemNet
 from exp.exp_klinear import Exp_KLinear
+from exp.exp_mbo import Exp_MBo
 import random
 import numpy as np
 
@@ -18,7 +19,7 @@ parser = argparse.ArgumentParser(description='Autoformer & Transformer family fo
 parser.add_argument('--is_training', type=int, default=1, help='status')
 parser.add_argument('--train_only', type=bool, required=False, default=False, help='perform training on full input dataset without validation and testing')
 parser.add_argument('--model_id', type=str, default='test', help='model id')
-parser.add_argument('--model', type=str, default='MemNet',
+parser.add_argument('--model', type=str, default='MBo',
                     help='model name, options: [KernelLayer, Autoformer, Informer, Transformer]')
 
 # data loader
@@ -79,7 +80,7 @@ parser.add_argument('--lradj', type=str, default='type1', help='adjust learning 
 parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
 
 # GPU
-parser.add_argument('--use_gpu', type=bool, default=True, help='use gpu')
+parser.add_argument('--use_gpu', type=bool, default=False, help='use gpu')
 parser.add_argument('--gpu', type=int, default=0, help='gpu')
 parser.add_argument('--use_multi_gpu', action='store_true', help='use multiple gpus', default=False)
 parser.add_argument('--devices', type=str, default='0,1,2,3', help='device ids of multile gpus')
@@ -106,6 +107,9 @@ if args.model == "MemNet":
     Exp = Exp_MemNet
 elif args.model == "KernelLayer":
     Exp = Exp_KLinear
+elif args.model == "MBo":
+    args.label_len = 0
+    Exp = Exp_MBo
 else:
     Exp = Exp_Main
 
