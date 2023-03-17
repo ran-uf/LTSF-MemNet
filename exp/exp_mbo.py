@@ -125,7 +125,7 @@ class Exp_MBo(Exp_Basic):
                 iter_count += 1
                 model_optim.zero_grad()
                 batch_x = batch_x.float().to(self.device)
-                batch_y = batch_y.float()
+                batch_y = batch_y.float().to(self.device)
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
                         loss, track_cov0 = self.model.get_loss(batch_x, batch_y, track_cov0, i_for_train)

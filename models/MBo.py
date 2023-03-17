@@ -25,7 +25,7 @@ class NETWORK_F_MLP(nn.Module):
         self.fc_final = nn.Linear(HIDDEN, out_dim, bias=True)
 
     def forward(self, x):
-        same_noise = torch.zeros((x.shape[0], 50)).uniform_()
+        same_noise = torch.zeros((x.shape[0], 50)).uniform_().to(x.device)
         x = torch.cat((x, same_noise), 1)
 
         for i in range(0, self.many_layer):
@@ -43,13 +43,13 @@ class wf_layer_WIENERSOLUTION(torch.nn.Module):
         self.weights = torch.nn.Parameter(torch.zeros(out_dim, in_dim + 1))
 
     def forward(self, x):
-        x_ = np.concatenate((np.ones((x.shape[0], 1)), x), 1)
-
-        return self.weights @ x_.T
+        # x_ = np.concatenate((np.ones((x.shape[0], 1)), x), 1)
+        x = torch.cat([torch.ones(x.shape[0], 1, x.shape[2]), x], dim=1)
+        return torch.einsum('blf, al->baf', x, self.weights)
 
     def train_weights(self, x, desire_list):
         x_ = np.concatenate((np.ones((x.shape[0], 1)), x), 1)
-        self.weights.data = desire_list.T @ x_ @ np.linalg.pinv(x_.T @ x_)
+        self.weights.data = (desire_list.T @ x_ @ np.linalg.pinv(x_.T @ x_)).float()
         return (x_.T @ x_), desire_list.T @ x_
 
 
@@ -61,7 +61,7 @@ def adaptive_estimation(v_t, beta, square_term, i):
 def produce_CC_GRAD_ALL_new(cat_vector, track_cov, i, threshold):
 #     XY = cat_vector.T@cat_vector/cat_vector.shape[0] - cat_vector.mean(0).unsqueeze(1)@cat_vector.mean(0).unsqueeze(0)
     XY = cat_vector.T@cat_vector/cat_vector.shape[0]
-    cov = XY + torch.eye((XY.shape[0]))*(threshold)
+    cov = XY + torch.eye((XY.shape[0]), device=XY.device)*(threshold)
 #     cov = XY
 
     track_cov, cov_estimate = adaptive_estimation(track_cov, 0.5, cov, i)
@@ -79,7 +79,7 @@ class Model(torch.nn.Module):
         self.f = NETWORK_F_MLP(input_dim=configs.seq_len, HIDDEN=96, out_dim=self.out_dim, how_many_layers=2)
         self.g = NETWORK_F_MLP(input_dim=configs.pred_len, HIDDEN=96, out_dim=self.out_dim, how_many_layers=2)
         self.layer = wf_layer_WIENERSOLUTION(self.out_dim, configs.pred_len)
-        self.cov_estimate = None
+        self.cov_estimate = torch.nn.Parameter(torch.zeros(self.out_dim + self.out_dim, self.out_dim + self.out_dim))
 
     def get_loss(self, x, y, track_cov0=None, i=0):
         if track_cov0 is None:
@@ -89,7 +89,7 @@ class Model(torch.nn.Module):
 
         cat_vector = torch.cat((output_f, output_g), 1)
         cov_estimate, cov, track_cov0 = produce_CC_GRAD_ALL_new(cat_vector, track_cov0, i, self.threshold)
-        self.cov_estimate = cov_estimate
+        self.cov_estimate.data = cov_estimate
         cov_estimate_f = cov_estimate[:self.out_dim, :self.out_dim]
         cov_f = cov[:self.out_dim, :self.out_dim]
 
@@ -109,19 +109,30 @@ class Model(torch.nn.Module):
             y.append(_y.float())
         x = torch.cat(x, dim=0).transpose(1, 2).reshape(-1, self.seq_len)
         y = torch.cat(y, dim=0).transpose(1, 2).reshape(-1, self.pred_len)
-        # todo get NaN values here
+
         eigen_normalized_f, eig_PF, ratio_map = self._calculate_general_ratio(x, self.cov_estimate)
         self.layer.train_weights(eigen_normalized_f, y)
-#         predict = layer_f.forward(eigen_normalized_f)
-# #         error = (desire-predict)**2
-# #         print('error:', error.mean())
+
+        # device = next(self.parameters()).device
+        # r = 0
+        # p = 0
+        # for (_x, _y, _, _) in loader:
+        #     _x = _x.float().reshape(-1, self.seq_len).to(device)
+        #     _y = _y.float().reshape(-1, self.pred_len).to(device)
+        #     _x, _, _ = self._calculate_general_ratio(_x, self.cov_estimate)
+        #     _x = torch.cat([torch.ones((_x.shape[0], 1)), _x], 1)
+        #     r += _x.T @ _x
+        #     p += _y.T @ _x
+        #
+        # self.layer.weights.data = p @ np.linalg.pinv(r)
 
     def pred(self, x):
         o = []
         for i in range(x.shape[2]):
             eigen_normalized_f, eig_PF, ratio_map = self._calculate_general_ratio(x[:, :, i], self.cov_estimate)
-            o.append(self.layer.forward(eigen_normalized_f).T)
-        return torch.stack(o, dim=-1)
+            o.append(eigen_normalized_f)
+        o = torch.stack(o, dim=2)
+        return self.layer.forward(o)
 
     def _PP_generate_quantities_gpu(self, cov_estimate):
         E1, V1 = torch.linalg.eigh(cov_estimate[:self.out_dim, :self.out_dim])
@@ -154,7 +165,7 @@ class Model(torch.nn.Module):
         with torch.no_grad():
             BS = 100
 
-            output_f_inter = torch.zeros((input_f_inter.shape[0], self.out_dim))
+            output_f_inter = torch.zeros((input_f_inter.shape[0], self.out_dim), device=input_f_inter.device)
             for k in range(0, BS):
                 output_f_inter = (self.f(input_f_inter) + output_f_inter * k) / (k + 1)
 
