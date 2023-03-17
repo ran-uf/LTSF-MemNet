@@ -75,9 +75,9 @@ class Exp_MBo(Exp_Basic):
                         outputs = self.model(batch_x)
                     else:
                         if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_y.shape[1])
+                            outputs = self.model.pred(batch_x)
                         else:
-                            outputs = self.model(batch_x, batch_y.shape[1])
+                            outputs = self.model.pred(batch_x)
                 f_dim = -1 if self.args.features == 'MS' else 0
                 outputs = outputs[:, -self.args.pred_len:, f_dim:]
                 batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
@@ -113,11 +113,11 @@ class Exp_MBo(Exp_Basic):
         if self.args.use_amp:
             scaler = torch.cuda.amp.GradScaler()
 
-        i_for_train = 0
+        i_for_train = 1
         track_cov0 = None
         for epoch in range(self.args.train_epochs):
             iter_count = 0
-            train_loss = []
+            # train_loss = []
 
             self.model.train()
             epoch_time = time.time()
@@ -153,7 +153,7 @@ class Exp_MBo(Exp_Basic):
             # train_loss = np.average(train_loss)
             self.model.train_layer(train_loader)
             if not self.args.train_only:
-                trian_loss = self.vali(train_data, train_loader, criterion)
+                train_loss = self.vali(train_data, train_loader, criterion)
                 vali_loss = self.vali(vali_data, vali_loader, criterion)
                 test_loss = self.vali(test_data, test_loader, criterion)
 
@@ -206,21 +206,21 @@ class Exp_MBo(Exp_Basic):
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
                         if 'Linear' in self.args.model:
-                            outputs = self.model(batch_x, batch_y.shape[1])
+                            outputs = self.model.pred(batch_x)
                         else:
                             if self.args.output_attention:
-                                outputs = self.model(batch_x, batch_y.shape[1])
+                                outputs = self.model.pred(batch_x)
                             else:
-                                outputs = self.model(batch_x, batch_y.shape[1])
+                                outputs = self.model.pred(batch_x)
                 else:
                     if 'Linear' in self.args.model:
-                        outputs = self.model(batch_x, batch_y.shape[1])
+                        outputs = self.model.pred(batch_x)
                     else:
                         if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_y.shape[1])
+                            outputs = self.model.pred(batch_x)
 
                         else:
-                            outputs = self.model(batch_x, batch_y.shape[1])
+                            outputs = self.model.pred(batch_x)
 
                 f_dim = -1 if self.args.features == 'MS' else 0
                 # print(outputs.shape,batch_y.shape)

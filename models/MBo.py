@@ -37,18 +37,19 @@ class NETWORK_F_MLP(nn.Module):
         return x
 
 
-class wf_layer_WIENERSOLUTION:
-    def __init__(self):
-        self.weights = None
+class wf_layer_WIENERSOLUTION(torch.nn.Module):
+    def __init__(self, in_dim, out_dim):
+        super(wf_layer_WIENERSOLUTION, self).__init__()
+        self.weights = torch.nn.Parameter(torch.zeros(out_dim, in_dim + 1))
 
     def forward(self, x):
         x_ = np.concatenate((np.ones((x.shape[0], 1)), x), 1)
 
         return self.weights @ x_.T
 
-    def train(self, x, desire_list):
+    def train_weights(self, x, desire_list):
         x_ = np.concatenate((np.ones((x.shape[0], 1)), x), 1)
-        self.weights = desire_list.T @ x_ @ np.linalg.pinv(x_.T @ x_)
+        self.weights.data = desire_list.T @ x_ @ np.linalg.pinv(x_.T @ x_)
         return (x_.T @ x_), desire_list.T @ x_
 
 
@@ -74,10 +75,10 @@ class Model(torch.nn.Module):
         self.pred_len = configs.pred_len
         self.in_channels = configs.enc_in
         self.threshold = 1e-6
-        self.out_dim = 64
-        self.f = NETWORK_F_MLP(input_dim=configs.seq_len, HIDDEN=128, out_dim=self.out_dim, how_many_layers=2)
-        self.g = NETWORK_F_MLP(input_dim=configs.pred_len, HIDDEN=128, out_dim=self.out_dim, how_many_layers=2)
-        self.layer = wf_layer_WIENERSOLUTION()
+        self.out_dim = 96
+        self.f = NETWORK_F_MLP(input_dim=configs.seq_len, HIDDEN=96, out_dim=self.out_dim, how_many_layers=2)
+        self.g = NETWORK_F_MLP(input_dim=configs.pred_len, HIDDEN=96, out_dim=self.out_dim, how_many_layers=2)
+        self.layer = wf_layer_WIENERSOLUTION(self.out_dim, configs.pred_len)
         self.cov_estimate = None
 
     def get_loss(self, x, y, track_cov0=None, i=0):
@@ -110,14 +111,17 @@ class Model(torch.nn.Module):
         y = torch.cat(y, dim=0).transpose(1, 2).reshape(-1, self.pred_len)
         # todo get NaN values here
         eigen_normalized_f, eig_PF, ratio_map = self._calculate_general_ratio(x, self.cov_estimate)
-        self.layer.train(eigen_normalized_f, y)
+        self.layer.train_weights(eigen_normalized_f, y)
 #         predict = layer_f.forward(eigen_normalized_f)
 # #         error = (desire-predict)**2
 # #         print('error:', error.mean())
 
     def pred(self, x):
-        eigen_normalized_f, eig_PF, ratio_map = self._calculate_general_ratio(x, self.cov_estimate)
-        return self.layer.forward(eigen_normalized_f)
+        o = []
+        for i in range(x.shape[2]):
+            eigen_normalized_f, eig_PF, ratio_map = self._calculate_general_ratio(x[:, :, i], self.cov_estimate)
+            o.append(self.layer.forward(eigen_normalized_f).T)
+        return torch.stack(o, dim=-1)
 
     def _PP_generate_quantities_gpu(self, cov_estimate):
         E1, V1 = torch.linalg.eigh(cov_estimate[:self.out_dim, :self.out_dim])
