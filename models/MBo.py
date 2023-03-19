@@ -172,8 +172,8 @@ class Model(torch.nn.Module):
             normalized_f = output_f_inter @ RF_NORM
             eigen_normalized_f = normalized_f @ eig_vec_PF
             # eigen_normalized_f = eigen_normalized_f*torch.from_numpy(p_x.reshape(-1, 1)).cuda().float() # whether has density
-            ratio_map = (eigen_normalized_f * eig_PF.reshape(1, -1)) @ eigen_normalized_f.T
-
+            # ratio_map = (eigen_normalized_f * eig_PF.reshape(1, -1)) @ eigen_normalized_f.T
+            ratio_map = None
         return eigen_normalized_f, eig_PF, ratio_map
 
     def calculate_general_ratio_withcov(self, input_f_inter, cov_estimate):
