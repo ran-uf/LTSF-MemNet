@@ -11,13 +11,14 @@ class NETWORK_F_MLP(nn.Module):
 
         self.fc_list = []
         self.bn_list = []
+        self.dim_noise = 128
 
-        self.fc_list.append(nn.Linear(input_dim + 50, HIDDEN, bias=True))
+        self.fc_list.append(nn.Linear(input_dim + self.dim_noise, HIDDEN, bias=True))
         self.bn_list.append(nn.BatchNorm1d(HIDDEN))
 
         for i in range(0, self.many_layer - 1):
-            self.fc_list.append(nn.Linear(HIDDEN, HIDDEN, bias=True))
-            self.bn_list.append(nn.BatchNorm1d(HIDDEN))
+            self.fc_list.append(nn.Linear(HIDDEN, out_dim, bias=True))
+            # self.bn_list.append(nn.BatchNorm1d(HIDDEN))
 
         self.fc_list = nn.ModuleList(self.fc_list)
         self.bn_list = nn.ModuleList(self.bn_list)
@@ -25,15 +26,15 @@ class NETWORK_F_MLP(nn.Module):
         self.fc_final = nn.Linear(HIDDEN, out_dim, bias=True)
 
     def forward(self, x):
-        same_noise = torch.zeros((x.shape[0], 50)).uniform_().to(x.device)
+        same_noise = torch.zeros((x.shape[0], self.dim_noise)).uniform_().to(x.device)
         x = torch.cat((x, same_noise), 1)
 
         for i in range(0, self.many_layer):
             x = self.fc_list[i](x)
-            x = torch.relu(x)
-            x = self.bn_list[i](x)
+            # x = torch.relu(x)
+            # x = self.bn_list[i](x)
 
-        x = torch.sigmoid((self.fc_final(x)))
+        # x = torch.sigmoid((self.fc_final(x)))
         return x
 
 
@@ -74,10 +75,10 @@ class Model(torch.nn.Module):
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len
         self.in_channels = configs.enc_in
-        self.threshold = 1e-6
+        self.threshold = 1e-8
         self.out_dim = 96
-        self.f = NETWORK_F_MLP(input_dim=configs.seq_len, HIDDEN=96, out_dim=self.out_dim, how_many_layers=2)
-        self.g = NETWORK_F_MLP(input_dim=configs.pred_len, HIDDEN=96, out_dim=self.out_dim, how_many_layers=2)
+        self.f = NETWORK_F_MLP(input_dim=configs.seq_len, HIDDEN=96, out_dim=self.out_dim, how_many_layers=1)
+        self.g = NETWORK_F_MLP(input_dim=configs.pred_len, HIDDEN=96, out_dim=self.out_dim, how_many_layers=1)
         self.layer = wf_layer_WIENERSOLUTION(self.out_dim, configs.pred_len)
         self.cov_estimate = torch.nn.Parameter(torch.zeros(self.out_dim + self.out_dim, self.out_dim + self.out_dim))
 
@@ -163,7 +164,7 @@ class Model(torch.nn.Module):
     def _calculate_general_ratio(self, input_f_inter, cov_estimate):
         RF_NORM, RG_NORM, P_STAR, eig_PF, eig_vec_PF, PP_G, eig_vec_PG = self._PP_generate_quantities_gpu(cov_estimate)
         with torch.no_grad():
-            BS = 100
+            BS = 10
 
             output_f_inter = torch.zeros((input_f_inter.shape[0], self.out_dim), device=input_f_inter.device)
             for k in range(0, BS):
