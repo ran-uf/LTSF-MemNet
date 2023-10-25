@@ -1,6 +1,9 @@
 # MemNet on LTSF
 Implementation of functional weights in RKHS for the paper "Universal Recurrent Event Memories for Streaming Data" (IJCNN23).
 
+This code is built on the code base of Informer, which is available: 
+https://github.com/zhouhaoyi/Informer2020
+
 ## Usage
 All datasets are provided in this repository. Run the following cmd for review.
 ```
