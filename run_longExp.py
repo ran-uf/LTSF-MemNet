@@ -13,7 +13,7 @@ import numpy as np
 # torch.manual_seed(fix_seed)
 # np.random.seed(fix_seed)
 
-parser = argparse.ArgumentParser(description='Autoformer & Transformer family for Time Series Forecasting')
+parser = argparse.ArgumentParser(description='Implement of MemNet for Time Series Forecasting')
 
 # basic config
 parser.add_argument('--is_training', type=int, default=1, help='status')
